@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#dceeff">
+<title>Puzzle Bersama Cegah Bullying</title>
+<style>
+:root{--blue:#dceeff;--navy:#23445d;--peach:#ffe0d2;--yellow:#fff0a8;--green:#dff1d5;--pink:#f7d6e5}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--navy);background:linear-gradient(135deg,#f4f9ff,#fff9f1);min-height:100vh}
+main{max-width:1000px;margin:auto;padding:22px 16px 42px}
+header{text-align:center;padding:10px 0 18px}
+.tag{display:inline-block;background:#fff;border:1px solid #d5e5f0;border-radius:999px;padding:7px 13px;font-size:.85rem}
+h1{font-size:clamp(1.8rem,5vw,3rem);line-height:1.1;margin:14px 0 10px;color:#214a68}
+header p{max-width:680px;margin:0 auto;line-height:1.55}
+.panel{background:#fff;border:1px solid #e1eaf0;border-radius:20px;padding:16px;box-shadow:0 8px 28px #294b6410}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;margin:16px 0}
+button{border:0;border-radius:12px;padding:11px 16px;font-weight:700;cursor:pointer;background:#2f678b;color:white;font-size:.95rem}
+button.secondary{background:#eaf3fa;color:#23445d;border:1px solid #d5e5f0}
+button:focus-visible{outline:3px solid #f2b544;outline-offset:2px}
+#status{font-weight:700;text-align:center;margin:8px 0 14px}
+.board-wrap{max-width:760px;margin:auto}
+#board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;background:#e9f0f5;padding:5px;border-radius:14px;touch-action:manipulation}
+.piece{position:relative;aspect-ratio:1/1;border:2px solid white;border-radius:7px;overflow:hidden;cursor:grab;background-color:#e7f2fb;background-image:var(--puzzle-image);background-size:400% 400%;box-shadow:0 2px 5px #24445b15;user-select:none}
+.piece:active{cursor:grabbing}
+.piece.selected{outline:4px solid #f1b84b;outline-offset:-4px}
+.piece.correct{border-color:#8abf88}
+.piece.correct:after{content:"✓";position:absolute;right:4px;top:3px;background:#fffE;border-radius:50%;width:21px;height:21px;display:grid;place-items:center;font-size:13px;font-weight:900;color:#397b42}
+.piece:focus-visible{outline:4px solid #e7a72f;outline-offset:-4px}
+.hint{font-size:.92rem;line-height:1.55;text-align:center;margin:14px auto 0;max-width:700px}
+.message{display:none;text-align:center;background:#e7f5e2;border:1px solid #c6e5bd;padding:16px;border-radius:14px;margin:16px auto 0;max-width:760px}
+.message.show{display:block}
+footer{text-align:center;font-size:.82rem;opacity:.8;margin-top:20px}
+@media(min-width:700px){#board{gap:7px;padding:7px}.piece{border-radius:9px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div class="tag">🧩 Media permainan edukatif BK</div>
+<h1>Bersama Cegah Bullying</h1>
+<p>Susun 16 kepingan hingga menjadi gambar utuh. Setiap orang berhak dihargai, didukung, dan merasa aman di sekolah.</p>
+</header>
+<section class="panel">
+<div class="controls">
+<button id="shuffle">🔀 Acak kepingan</button>
+<button id="restart" class="secondary">↻ Mulai ulang</button>
+<button id="showHint" class="secondary">💡 Lihat gambar acuan</button>
+</div>
+<div id="status" aria-live="polite">Ayo mulai! Pilih satu kepingan, lalu pilih kepingan lain untuk menukar posisinya.</div>
+<div class="board-wrap"><div id="board" aria-label="Papan puzzle 16 kepingan"></div></div>
+<div id="success" class="message" role="status"><strong>🎉 Hebat! Puzzle berhasil disusun!</strong><br>Ingat, cegah bullying dimulai dari menghargai perbedaan, mendukung teman, dan berani mencari bantuan.</div>
+<p class="hint">Cara bermain: ketuk dua kepingan untuk menukar posisinya. Di laptop, kamu juga bisa menyeret kepingan. Susun sampai gambar dan urutannya benar.</p>
+</section>
+<footer>Pesan kita: Hargai perbedaan • Berteman dengan baik • Dukung teman • Ciptakan lingkungan aman</footer>
+</main>
+<div id="hintModal" style="display:none;position:fixed;inset:0;background:#17354dcc;z-index:5;padding:20px;align-items:center;justify-content:center" role="dialog" aria-modal="true" aria-label="Gambar acuan">
+<div style="background:white;border-radius:18px;padding:14px;max-width:700px;width:100%;text-align:center">
+<h2>Gambar acuan</h2><img id="reference" alt="Poster Bersama Cegah Bullying" style="display:block;width:100%;border-radius:10px">
+<p><button id="closeHint">Tutup gambar</button></p>
+</div></div>
+<script>
+/* Letakkan poster final sebagai poster.jpg di folder yang sama. */
+const imageUrl = "poster.jpg";
+const board = document.getElementById("board");
+const statusEl = document.getElementById("status");
+const success = document.getElementById("success");
+const modal = document.getElementById("hintModal");
+document.documentElement.style.setProperty("--puzzle-image", `url("${imageUrl}")`);
+document.getElementById("reference").src=imageUrl;
+let order=[], selected=null, moves=0, dragFrom=null;
+const total=16;
+function solved(){return order.every((v,i)=>v===i)}
+function draw(){
+ board.innerHTML="";
+ order.forEach((pieceId,slot)=>{
+  const b=document.createElement("button");
+  b.type="button"; b.className="piece"; b.setAttribute("aria-label",`Kepingan di posisi ${slot+1}`);
+  const row=Math.floor(pieceId/4), col=pieceId%4;
+  b.style.backgroundPosition=`${col*100/3}% ${row*100/3}%`;
+  if(pieceId===slot)b.classList.add("correct");
+  if(selected===slot)b.classList.add("selected");
+  b.draggable=true;
+  b.addEventListener("click",()=>pick(slot));
+  b.addEventListener("dragstart",e=>{dragFrom=slot;e.dataTransfer.setData("text/plain",String(slot))});
+  b.addEventListener("dragover",e=>e.preventDefault());
+  b.addEventListener("drop",e=>{e.preventDefault();const from=Number(e.dataTransfer.getData("text/plain"));swap(from,slot)});
+  board.appendChild(b);
+ });
+ success.classList.toggle("show",solved());
+ if(solved()){statusEl.textContent=`Selesai dalam ${moves} pertukaran. Kamu hebat! 🎉`}
+}
+function pick(slot){
+ if(selected===null){selected=slot;statusEl.textContent="Kepingan dipilih. Sekarang pilih kepingan kedua untuk menukar posisi.";draw();return}
+ if(selected===slot){selected=null;statusEl.textContent="Pilihan dibatalkan.";draw();return}
+ swap(selected,slot);
+}
+function swap(a,b){
+ if(a==null||b==null||a===b)return;
+ [order[a],order[b]]=[order[b],order[a]];
+ moves++;selected=null;
+ statusEl.textContent=`Jumlah pertukaran: ${moves}. ${solved()?"Puzzle selesai!":"Terus susun kepingannya."}`;
+ draw();
+}
+function shuffle(){
+ order=Array.from({length:total},(_,i)=>i);
+ for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]]}
+ if(solved())[order[0],order[1]]=[order[1],order[0]];
+ moves=0;selected=null;success.classList.remove("show");
+ statusEl.textContent="Kepingan diacak. Ayo susun kembali gambar!";
+ draw();
+}
+function restart(){order=Array.from({length:total},(_,i)=>i);moves=0;selected=null;statusEl.textContent="Papan diatur ulang. Tekan “Acak kepingan” untuk bermain.";draw()}
+document.getElementById("shuffle").addEventListener("click",shuffle);
+document.getElementById("restart").addEventListener("click",restart);
+document.getElementById("showHint").addEventListener("click",()=>{modal.style.display="flex"});
+document.getElementById("closeHint").addEventListener("click",()=>{modal.style.display="none"});
+modal.addEventListener("click",e=>{if(e.target===modal)modal.style.display="none"});
+const preload=new Image();preload.onload=()=>{};preload.onerror=()=>{statusEl.textContent="Tambahkan file poster.jpg di folder yang sama agar gambar puzzle muncul."};preload.src=imageUrl;
+restart();
+</script>
+</body>
+</html>
